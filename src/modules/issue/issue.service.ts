@@ -8,7 +8,7 @@ const createIssueIntoDB = async (payload: any) => {
         returning id, title, description, type, status, reporter_id, created_at, updated_at
      `, [title, description, type, reporter_id]);
 
-     console.log(result.rows[0])
+     return result;
 };
 
 
