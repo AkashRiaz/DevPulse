@@ -12,5 +12,16 @@ router.post(
 );
 
 router.get("/:id", issueController.getSingleIssue);
+router.put(
+  "/:id",
+  auth(USER_ROLE.maintainer, USER_ROLE.contributor),
+  issueController.updateIssue,
+);
+
+router.delete(
+  "/:id",
+  auth(USER_ROLE.maintainer),
+  issueController.deleteIssue,
+);
 
 export const issueRoute = router;
