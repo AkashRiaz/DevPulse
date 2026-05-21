@@ -4,6 +4,7 @@ import express, {
   type Response,
 } from "express";
 import cors from "cors";
+import { authRoute } from "./modules/auth/auth.route";
 const app: Application = express();
 
 // middleware
@@ -18,5 +19,7 @@ app.get("/", (req: Request, res: Response) => {
     author: "Md Akashuzzaman Riaz",
   });
 });
+
+app.use("/api/auth", authRoute);
 
 export default app;
