@@ -1,8 +1,9 @@
 import { pool } from "../../db";
-import type { TRequester } from "../../types";
+import { USER_ROLE, type TRequester } from "../../types";
+import { ISSUE_SORTING_OPTIONS, ISSUE_STATUS_OPTIONS, type ICreateIssue, type TIssueSortingOption, type TIssueStatusOption, type TIssueTypeOption } from "./issue.interface";
 
 
-const createIssueIntoDB = async (payload: any) => {
+const createIssueIntoDB = async (payload: ICreateIssue) => {
   const { title, description, type, reporter_id } = payload;
 
   const result = await pool.query(
@@ -47,9 +48,79 @@ const getSingleIssueFromDB = async (id: string) => {
   return user;
 };
 
+const getAllIssuesFromDB = async (query: {
+  sort: TIssueSortingOption;
+  type?: TIssueTypeOption;
+  status?: TIssueStatusOption;
+}) => {
+  const values: Array<string> = [];
+  const whereClauses: string[] = [];
+  let index = 1;
+
+  if (query.type) {
+    whereClauses.push(`type=$${index}`);
+    values.push(query.type);
+    index += 1;
+  }
+
+  if (query.status) {
+    whereClauses.push(`status=$${index}`);
+    values.push(query.status);
+    index += 1;
+  }
+
+  const where = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
+  const sortOrder = query.sort === ISSUE_SORTING_OPTIONS.oldest ? "ASC" : "DESC";
+
+  const result = await pool.query(
+    `
+    SELECT id, title, description, type, status, reporter_id, created_at, updated_at
+    FROM issues
+    ${where}
+    ORDER BY created_at ${sortOrder}
+    `,
+    values,
+  );
+
+  if (result.rows.length === 0) {
+    return [];
+  }
+
+  const reporterIds = [
+    ...new Set(
+      result.rows
+        .map((issue) => issue.reporter_id)
+        .filter((reporterId) => reporterId !== null),
+    ),
+  ];
+
+  const reporterResult = await pool.query(
+    `
+    SELECT id, name, role
+    FROM users
+    WHERE id = ANY($1::int[])
+    `,
+    [reporterIds],
+  );
+
+  const reporterMap = new Map(
+    reporterResult.rows.map((reporter) => [reporter.id, reporter]),
+  );
+
+  return result.rows.map((issue) => {
+    const formattedIssue = {
+      ...issue,
+      reporter: reporterMap.get(issue.reporter_id) || null,
+    };
+
+    delete formattedIssue.reporter_id;
+    return formattedIssue;
+  });
+};
+
 const updateIssueIntoDB = async (
   id: string,
-  payload: any,
+  payload: Partial<ICreateIssue>,
   requester: TRequester,
 ) => {
   const issueResult = await pool.query(
@@ -66,11 +137,11 @@ const updateIssueIntoDB = async (
   }
 
   const issue = issueResult.rows[0];
-  const isMaintainer = requester.role === "maintainer";
+  const isMaintainer = requester.role === USER_ROLE.maintainer;
   const isOwnerContributor =
-    requester.role === "contributor" &&
+    requester.role === USER_ROLE.contributor &&
     issue.reporter_id === requester.id &&
-    issue.status === "open";
+    issue.status === ISSUE_STATUS_OPTIONS.open;
 
   if (!isMaintainer && !isOwnerContributor) {
     throw new Error("Forbidden access!");
@@ -100,6 +171,7 @@ const deleteIssueFromDB = async (id: string) =>{
 
 export const issueService = {
   createIssueIntoDB,
+  getAllIssuesFromDB,
   getSingleIssueFromDB,
   updateIssueIntoDB,
   deleteIssueFromDB

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import sendResponse from "../../utils/sendResponse";
 import { issueService } from "./issue.service";
+import { ISSUE_SORTING_OPTIONS, ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS, type TIssueSortingOption, type TIssueStatusOption, type TIssueTypeOption } from "./issue.interface";
 
 const createIssue = async (req: Request, res: Response) => {
   try {
@@ -33,6 +34,81 @@ const createIssue = async (req: Request, res: Response) => {
       statusCode: 500,
       success: false,
       message: error.message || "Failed to create issue",
+      error: error,
+    });
+  }
+};
+
+const getAllIssues = async (req: Request, res: Response) => {
+  try {
+    const { sort: sortValue, type, status } = req.query;
+    const sort =
+      typeof sortValue === "string" && sortValue.length > 0
+        ? sortValue
+        : "newest";
+
+    if (sort !== ISSUE_SORTING_OPTIONS.newest && sort !== ISSUE_SORTING_OPTIONS.oldest) {
+      return sendResponse(res, {
+        statusCode: 400,
+        success: false,
+        message: "Invalid sort value. Allowed: newest, oldest",
+      });
+    }
+
+    if (
+      typeof type === "string" &&
+      type !== ISSUE_TYPE_OPTIONS.bug &&
+      type !== ISSUE_TYPE_OPTIONS.feature_request
+    ) {
+      return sendResponse(res, {
+        statusCode: 400,
+        success: false,
+        message: "Invalid type value. Allowed: bug, feature_request",
+      });
+    }
+
+    if (
+      typeof status === "string" &&
+      status !== ISSUE_STATUS_OPTIONS.open &&
+      status !== ISSUE_STATUS_OPTIONS.in_progress &&
+      status !== ISSUE_STATUS_OPTIONS.resolved
+    ) {
+      return sendResponse(res, {
+        statusCode: 400,
+        success: false,
+        message: "Invalid status value. Allowed: open, in_progress, resolved",
+      });
+    }
+
+    const queryOptions: {
+      sort: TIssueSortingOption;
+      type?: TIssueTypeOption;
+      status?: TIssueStatusOption;
+    } = {
+      sort: sort as TIssueSortingOption,
+    };
+
+    if (typeof type === "string") {
+      queryOptions.type = type as TIssueTypeOption;
+    }
+
+    if (typeof status === "string") {
+      queryOptions.status = status as TIssueStatusOption;
+    }
+
+    const result = await issueService.getAllIssuesFromDB(queryOptions);
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: "Issues retrieved successfully",
+      data: result,
+    });
+  } catch (error: any) {
+    sendResponse(res, {
+      statusCode: 500,
+      success: false,
+      message: error.message || "Failed to get issues",
       error: error,
     });
   }
@@ -112,14 +188,13 @@ const updateIssue = async (req: Request, res: Response) => {
   }
 };
 
-const deleteIssue = async (req:Request, res:Response)=>{
+const deleteIssue = async (req: Request, res: Response) => {
   try {
-
-    const {id} = req.params;
+    const { id } = req.params;
 
     const result = await issueService.deleteIssueFromDB(id as string);
 
-    if(result.rows.length === 0){
+    if (result.rows.length === 0) {
       return sendResponse(res, {
         statusCode: 404,
         success: false,
@@ -139,12 +214,11 @@ const deleteIssue = async (req:Request, res:Response)=>{
       error: error,
     });
   }
-}
-
-
+};
 
 export const issueController = {
   createIssue,
+  getAllIssues,
   getSingleIssue,
   updateIssue,
   deleteIssue,
